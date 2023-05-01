@@ -1,0 +1,12 @@
+[package]
+name = "cyberbot2077"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+winapi = { version = "0.3", features = ["winuser"] }
+clipboard-win = "4.4"
+bmp = "0.5"
+winput = "0.2"
+
+#tesseract = "0.12"
