@@ -2,7 +2,7 @@
 
 Bot, who solves breach protocol games from Cyberpunk 2077.
 
-[![Preview](assets/preview.gif)](assets/preview.mp4)
+![Preview](assets/preview.gif)
 
 ## Usage
 
@@ -10,7 +10,7 @@ Bot, who solves breach protocol games from Cyberpunk 2077.
 - Launch `cyberbot2077.exe`
 - Launch a breach protocol game
 - Move mouse cursor away. It must not obstruct the game field
-- Press `PrintScreen` keyboard button
+- Press `PrintScreen` (or `Alt + PrintScreen` in window mode) keyboard button
 - Wait a second
 - ???
 - PROFIT
@@ -22,10 +22,8 @@ Bot, who solves breach protocol games from Cyberpunk 2077.
 
 ## How it works
 
-This bot uses [Tesseract](https://github.com/tesseract-ocr/tesseract) library as OCR engine.
-
 `PrintScreen` keyboard button triggers the bot, and it grabs screenshot
-to recognize game field (matrix, conditions, max step count and screen coordinates).
+to recognize game field (matrix, conditions, buffer size and screen coordinates).
 
 ![Recognize example](assets/recognize.jpg)
 
@@ -83,33 +81,17 @@ Last solution `#6` will be applied.
 
 Download bot [here](https://github.com/ricorodriges/cyberbot2077/releases).
 
-Bot uses `tesseract/tesseract.exe` binary. So please [download binaries](https://github.com/UB-Mannheim/tesseract/wiki) and extract to `tesseract` directory
-```
-|- tesseract
-|  |- tesseract.exe
-|- cyberbot2077.exe
-```
-
 Then run `cyberbot2077.exe` and enjoy!
 
 ## Build
 
-Since this project uses [Tesseract](https://github.com/tesseract-ocr/tesseract),
-you need to build it yourself or [download binaries](https://github.com/UB-Mannheim/tesseract/wiki).
-
-Bot uses `tesseract/tesseract.exe` binary. So please extract binaries to `tesseract` directory
-```
-|- tesseract
-|  |- tesseract.exe
-|- src
-|- test
-|- Cargo.toml
-```
-
-Then you may run tests to make sure everything is ok and build
+You may run tests to make sure everything is ok
 ```sh
 cargo test
-cargo build --release
+```
 
+And build as usual rust crate
+```sh
+cargo build --release
 ./target/release/cyberbot2077.exe
 ```

@@ -7,9 +7,9 @@ use bmp::Image;
 use winapi::shared::minwindef::{LPARAM, LRESULT, WPARAM};
 use winapi::um::winuser;
 
-use crate::img::{crop_img, filter_img, load_img_from_clipboard, load_img_from_file};
+use crate::img::{GrayImage, load_img_from_clipboard, load_img_from_file};
 use crate::input::click;
-use crate::ocr::ocr_matrix;
+use crate::ocr::{ocr_matrix, ocr_conditions, MatrixTemplates};
 use crate::recognize::{CONDITION_COLOR, MATRIX_COLOR};
 
 mod img;
@@ -30,17 +30,20 @@ unsafe extern "system" fn keyboard_hook(code: i32, w_param: WPARAM, l_param: LPA
         if (*info).vkCode == winuser::VK_SNAPSHOT as _ {
             if LOCK.compare_exchange(false, true, Acquire, Acquire) == Ok(false) {
                 thread::spawn(|| {
+                    let templates = MatrixTemplates::load_templates();
                     // wait for clipboard buffer initialization
-                    thread::sleep(Duration::from_secs(1));
-                    let img = load_img_from_clipboard();
-                    if img.is_none() {
-                        eprintln!("Clipboard has no image data");
-                    } else {
-                        let result = execute(img.unwrap(), false);
-                        if result.is_err() {
-                            eprintln!("{}", result.unwrap_err());
+                    thread::sleep(Duration::from_millis(600));
+                    match load_img_from_clipboard() {
+                        None => {
+                            eprintln!("Clipboard has no image data");
                         }
-                    }
+                        Some(img) => {
+                            let result = execute(img, &templates, false);
+                            if result.is_err() {
+                                eprintln!("{}", result.unwrap_err());
+                            }
+                        }
+                    };
                     LOCK.store(false, Release);
                 });
             }
@@ -49,11 +52,10 @@ unsafe extern "system" fn keyboard_hook(code: i32, w_param: WPARAM, l_param: LPA
     winuser::CallNextHookEx(std::ptr::null_mut(), code, w_param, l_param)
 }
 
-fn execute(img: Image, solutions_only: bool) -> Result<(), String> {
+fn execute(img: Image, templates: &MatrixTemplates, solutions_only: bool) -> Result<(), String> {
     let matrix_area = recognize::find_matrix_area(&img).ok_or_else(|| "Matrix was not found".to_owned())?;
-    let mut matrix_img = crop_img(&img, matrix_area.0, matrix_area.1, matrix_area.2, matrix_area.3);
-    filter_img(&mut matrix_img, &MATRIX_COLOR, 60);
-    let matrix = match ocr_matrix(&matrix_img) {
+    let matrix_img = GrayImage::filter(&img, &MATRIX_COLOR, 50, matrix_area.0, matrix_area.1, matrix_area.2, matrix_area.3);
+    let matrix = match ocr_matrix(&matrix_img, templates) {
         Ok(r) => r,
         Err(err) => Err(format!("Matrix was not recognized: {}", err))?,
     };
@@ -69,16 +71,15 @@ fn execute(img: Image, solutions_only: bool) -> Result<(), String> {
     println!();
 
     let condition_area = recognize::find_condition_area(&img, &matrix_area).ok_or_else(|| "Conditions were not found".to_owned())?;
-    let mut condition_img = crop_img(&img, condition_area.0, condition_area.1, condition_area.2, condition_area.3);
-    filter_img(&mut condition_img, &CONDITION_COLOR, 60);
-    let conditions = match ocr_matrix(&condition_img) {
+    let condition_img = GrayImage::filter(&img, &CONDITION_COLOR, 50, condition_area.0, condition_area.1, condition_area.2, condition_area.3);
+    let conditions = match ocr_conditions(&condition_img, templates) {
         Ok(r) => r,
         Err(err) => Err(format!("Conditions were not recognized: {}", err))?,
     };
     drop(condition_img);
 
     println!("Conditions:");
-    for line in conditions.4.iter() {
+    for line in conditions.iter() {
         let hex = line.iter()
             .map(|v| format!("{:#04x} ", v))
             .collect::<String>();
@@ -86,17 +87,17 @@ fn execute(img: Image, solutions_only: bool) -> Result<(), String> {
     }
     println!();
 
-    let blocks = recognize::find_blocks_count(&img, &condition_area).ok_or_else(|| "Blocks were not found".to_owned())?;
-    println!("Steps: {}", blocks);
+    let steps = recognize::find_buffer_size(&img, &condition_area).ok_or_else(|| "Buffer size was not recognized".to_owned())?;
+    println!("Steps: {}", steps);
     println!();
 
-    let solutions = solver::solve(&matrix.4, &conditions.4, blocks);
+    let solutions = solver::solve(&matrix.4, &conditions, steps);
     println!("Found {} solutions", solutions.len());
     let best = solver::filter_best(&solutions);
     println!("{} best solutions:", best.len());
     for (i, s) in best.iter().enumerate() {
         let conditions = s.conditions.iter()
-            .map(|b| if *b { "✔ " } else { "✖ " })
+            .map(|&b| if b { "✔ " } else { "✖ " })
             .collect::<String>();
         let steps = s.steps.iter()
             .map(|step| matrix.4[step.y as usize][step.x as usize])
@@ -130,7 +131,7 @@ fn main() {
         let bmp_path = std::env::args().last().unwrap();
         println!("Reading {} bmp file...", &bmp_path);
         let img = load_img_from_file(bmp_path);
-        execute(img, true).expect("Error");
+        execute(img, &MatrixTemplates::load_templates(), true).expect("Error");
         return;
     }
 
